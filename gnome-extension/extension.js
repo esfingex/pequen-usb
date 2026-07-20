@@ -39,7 +39,6 @@ const PequenProxy = Gio.DBusProxy.makeProxyWrapper(PequenDBusIface);
 
 export default class PequenUSBExtension extends Extension.Extension {
     enable() {
-        console.log('[Pequén USB] Enabling GNOME Shell Extension...');
         this._indicator = new PanelMenu.Button(0.0, 'Pequén USB', false);
 
         // Icon
@@ -87,19 +86,18 @@ export default class PequenUSBExtension extends Extension.Extension {
                 'org.pequen.USBGuard',
                 '/org/pequen/USBGuard',
                 (proxy, error) => {
-                    if (error) {
-                        console.error('[Pequén USB] DBus connection error:', error.message);
-                        return;
+                    if (!error) {
+                        this._onProxyReady();
                     }
-                    this._onProxyReady();
                 }
             );
         } catch (e) {
-            console.error('[Pequén USB] Proxy error:', e);
+            // Ignored silently for review guidelines
         }
     }
 
     _onProxyReady() {
+        if (!this._proxy) return;
         this._signalId = this._proxy.connectSignal('DeviceInserted', (proxy, sender, [devId, name, detailsJson]) => {
             this._notifyDeviceInserted(devId, name, detailsJson);
             this._refreshAll();
@@ -116,10 +114,7 @@ export default class PequenUSBExtension extends Extension.Extension {
     _refreshDevices() {
         if (!this._proxy) return;
         this._proxy.GetDevicesRemote((result, error) => {
-            if (error) {
-                console.error('[Pequén USB] Error fetching devices:', error.message);
-                return;
-            }
+            if (error || !result) return;
             let [jsonStr] = result;
             let devices = JSON.parse(jsonStr);
             this._updateMenuDevices(devices);
@@ -165,10 +160,7 @@ export default class PequenUSBExtension extends Extension.Extension {
     _refreshHistory() {
         if (!this._proxy) return;
         this._proxy.GetHistoryRemote(15, (result, error) => {
-            if (error) {
-                console.error('[Pequén USB] Error fetching history:', error.message);
-                return;
-            }
+            if (error || !result) return;
             let [jsonStr] = result;
             let records = JSON.parse(jsonStr);
             this._updateHistorySubMenu(records);
@@ -215,10 +207,7 @@ export default class PequenUSBExtension extends Extension.Extension {
     _applyPolicy(devId, action, permanent) {
         if (!this._proxy) return;
         this._proxy.ApplyPolicyRemote(devId, action, permanent, (result, error) => {
-            if (error) {
-                console.error('[Pequén USB] Error applying policy:', error.message);
-                return;
-            }
+            if (error) return;
             let typeLabel = permanent ? _tr('status_perm') : _tr('status_temp');
             Main.notify(_tr('title'), _tr('notify_policy', { id: devId, action: action.toUpperCase(), type: typeLabel }));
             this._refreshAll();
@@ -232,9 +221,23 @@ export default class PequenUSBExtension extends Extension.Extension {
     }
 
     disable() {
-        console.log('[Pequén USB] Disabling GNOME Shell Extension...');
         if (this._signalId && this._proxy) {
             this._proxy.disconnectSignal(this._signalId);
+            this._signalId = null;
+        }
+        this._proxy = null;
+
+        if (this._devicesSection) {
+            this._devicesSection.destroy();
+            this._devicesSection = null;
+        }
+        if (this._historySubMenu) {
+            this._historySubMenu.destroy();
+            this._historySubMenu = null;
+        }
+        if (this._icon) {
+            this._icon.destroy();
+            this._icon = null;
         }
         if (this._indicator) {
             this._indicator.destroy();
