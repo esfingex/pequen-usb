@@ -22,8 +22,6 @@ const PequenDBusIface = `
   </interface>
 </node>`;
 
-const PequenProxy = Gio.DBusProxy.makeProxyWrapper(PequenDBusIface);
-
 export default class PequenUSBPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         window._settings = this.getSettings();
@@ -81,22 +79,19 @@ export default class PequenUSBPreferences extends ExtensionPreferences {
         window.add(configPage);
 
         // DBus Async Fetch for live device rows
-        try {
-            const proxy = new PequenProxy(
-                Gio.DBus.session,
-                'org.pequen.USBGuard',
-                '/org/pequen/USBGuard',
-                (p, error) => {
-                    if (error) {
-                        console.error('[Pequén USB Prefs] DBus error:', error.message);
-                        return;
-                    }
-                    this._loadLiveDevices(proxy, storageGroup, systemGroup);
+        const PequenProxy = Gio.DBusProxy.makeProxyWrapper(PequenDBusIface);
+        const proxy = new PequenProxy(
+            Gio.DBus.session,
+            'org.pequen.USBGuard',
+            '/org/pequen/USBGuard',
+            (p, error) => {
+                if (error) {
+                    console.error('[Pequén USB Prefs] DBus error:', error.message);
+                    return;
                 }
-            );
-        } catch (e) {
-            console.error('[Pequén USB Prefs] DBus init error:', e);
-        }
+                this._loadLiveDevices(proxy, storageGroup, systemGroup);
+            }
+        );
     }
 
     _loadLiveDevices(proxy, storageGroup, systemGroup) {

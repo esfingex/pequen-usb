@@ -71,6 +71,8 @@ fi
 
 # 5. Build & Install GNOME Shell Extension & GSchemas
 echo "[*] Empaquetando extensión de GNOME Shell..."
+(cd gnome-extension && zip -FS -r pequen-usb@esfingex.github.io.shell-extension.zip metadata.json extension.js prefs.js stylesheet.css schemas/ -x "*.zip")
+
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/pequen-usb@esfingex.github.io"
 mkdir -p "$EXT_DIR"
 cp -r gnome-extension/* "$EXT_DIR/"

@@ -4,7 +4,6 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
-import { _tr } from './i18n.js';
 
 const PequenDBusIface = `
 <node>
@@ -35,10 +34,10 @@ const PequenDBusIface = `
   </interface>
 </node>`;
 
-const PequenProxy = Gio.DBusProxy.makeProxyWrapper(PequenDBusIface);
-
 export default class PequenUSBExtension extends Extension.Extension {
     enable() {
+        this.initTranslations('pequen-usb');
+
         this._indicator = new PanelMenu.Button(0.0, 'Pequén USB', false);
 
         // Icon
@@ -49,8 +48,8 @@ export default class PequenUSBExtension extends Extension.Extension {
         this._indicator.add_child(this._icon);
 
         // Title Header
-        let titleItem = new PopupMenu.PopupMenuItem(_tr('title'), { reactive: false });
-        titleItem.label.clutter_text.set_markup(`<b>${_tr('title')}</b>`);
+        let titleItem = new PopupMenu.PopupMenuItem(this._tr('title'), { reactive: false });
+        titleItem.label.clutter_text.set_markup(`<b>${this._tr('title')}</b>`);
         this._indicator.menu.addMenuItem(titleItem);
 
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -62,46 +61,57 @@ export default class PequenUSBExtension extends Extension.Extension {
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         // Interactive History SubMenu
-        this._historySubMenu = new PopupMenu.PopupSubMenuMenuItem(_tr('history'));
+        this._historySubMenu = new PopupMenu.PopupSubMenuMenuItem(this._tr('history'));
         this._indicator.menu.addMenuItem(this._historySubMenu);
 
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         // Refresh MenuItem
-        let refreshItem = new PopupMenu.PopupMenuItem(_tr('refresh'));
-        refreshItem.connect('activate', () => this._refreshAll());
+        let refreshItem = new PopupMenu.PopupMenuItem(this._tr('refresh'));
+        refreshItem.connectObject('activate', () => this._refreshAll(), this);
         this._indicator.menu.addMenuItem(refreshItem);
 
         // Settings / Preferences Window MenuItem
-        let prefsItem = new PopupMenu.PopupMenuItem(_tr('more_settings'));
-        prefsItem.connect('activate', () => this.openPreferences());
+        let prefsItem = new PopupMenu.PopupMenuItem(this._tr('more_settings'));
+        prefsItem.connectObject('activate', () => this.openPreferences(), this);
         this._indicator.menu.addMenuItem(prefsItem);
 
         Main.panel.addToStatusArea('pequen-usb', this._indicator);
 
-        // DBus Client Init
-        try {
-            this._proxy = new PequenProxy(
-                Gio.DBus.session,
-                'org.pequen.USBGuard',
-                '/org/pequen/USBGuard',
-                (proxy, error) => {
-                    if (!error) {
-                        this._onProxyReady();
-                    }
+        // DBus Client Init inside enable() scope without try-catch
+        const PequenProxy = Gio.DBusProxy.makeProxyWrapper(PequenDBusIface);
+        this._proxy = new PequenProxy(
+            Gio.DBus.session,
+            'org.pequen.USBGuard',
+            '/org/pequen/USBGuard',
+            (proxy, error) => {
+                if (error) {
+                    console.error(`[Pequén USB] DBus proxy error: ${error.message}`);
+                    return;
                 }
-            );
-        } catch (e) {
-            // Ignored silently for review guidelines
+                this._onProxyReady();
+            }
+        );
+    }
+
+    _tr(key, vars = {}) {
+        let template = this.gettext(key) || key;
+        for (const [k, v] of Object.entries(vars)) {
+            template = template.replace(`{${k}}`, v);
         }
+        return template;
     }
 
     _onProxyReady() {
         if (!this._proxy) return;
-        this._signalId = this._proxy.connectSignal('DeviceInserted', (proxy, sender, [devId, name, detailsJson]) => {
-            this._notifyDeviceInserted(devId, name, detailsJson);
-            this._refreshAll();
-        });
+        this._proxy.connectObject(
+            'DeviceInserted',
+            (proxy, sender, [devId, name, detailsJson]) => {
+                this._notifyDeviceInserted(devId, name, detailsJson);
+                this._refreshAll();
+            },
+            this
+        );
 
         this._refreshAll();
     }
@@ -128,29 +138,29 @@ export default class PequenUSBExtension extends Extension.Extension {
         let quickAccessDevices = devices.filter(dev => dev.category === 'storage' || dev.is_pinned);
 
         if (quickAccessDevices.length === 0) {
-            let emptyItem = new PopupMenu.PopupMenuItem(_tr('no_devices'), { reactive: false });
+            let emptyItem = new PopupMenu.PopupMenuItem(this._tr('no_devices'), { reactive: false });
             this._devicesSection.addMenuItem(emptyItem);
             return;
         }
 
         quickAccessDevices.forEach(dev => {
             let statusBadge = dev.is_allowed
-                ? (dev.is_permanent ? `🟢 [${_tr('status_perm')}]` : `🟡 [${_tr('status_temp')}]`)
-                : `🔴 [${_tr('status_blocked')}]`;
+                ? (dev.is_permanent ? `🟢 [${this._tr('status_perm')}]` : `🟡 [${this._tr('status_temp')}]`)
+                : `🔴 [${this._tr('status_blocked')}]`;
 
             let labelText = `${dev.name} ${statusBadge}`;
             let menuItem = new PopupMenu.PopupSubMenuMenuItem(labelText);
 
-            let allowPermItem = new PopupMenu.PopupMenuItem(_tr('allow_perm'));
-            allowPermItem.connect('activate', () => this._applyPolicy(dev.number, 'allow', true));
+            let allowPermItem = new PopupMenu.PopupMenuItem(this._tr('allow_perm'));
+            allowPermItem.connectObject('activate', () => this._applyPolicy(dev.number, 'allow', true), this);
             menuItem.menu.addMenuItem(allowPermItem);
 
-            let allowTempItem = new PopupMenu.PopupMenuItem(_tr('allow_temp'));
-            allowTempItem.connect('activate', () => this._applyPolicy(dev.number, 'allow', false));
+            let allowTempItem = new PopupMenu.PopupMenuItem(this._tr('allow_temp'));
+            allowTempItem.connectObject('activate', () => this._applyPolicy(dev.number, 'allow', false), this);
             menuItem.menu.addMenuItem(allowTempItem);
 
-            let blockItem = new PopupMenu.PopupMenuItem(_tr('block'));
-            blockItem.connect('activate', () => this._applyPolicy(dev.number, 'block', false));
+            let blockItem = new PopupMenu.PopupMenuItem(this._tr('block'));
+            blockItem.connectObject('activate', () => this._applyPolicy(dev.number, 'block', false), this);
             menuItem.menu.addMenuItem(blockItem);
 
             this._devicesSection.addMenuItem(menuItem);
@@ -171,7 +181,7 @@ export default class PequenUSBExtension extends Extension.Extension {
         this._historySubMenu.menu.removeAll();
 
         if (!records || records.length === 0) {
-            let emptyItem = new PopupMenu.PopupMenuItem(_tr('no_history'), { reactive: false });
+            let emptyItem = new PopupMenu.PopupMenuItem(this._tr('no_history'), { reactive: false });
             this._historySubMenu.menu.addMenuItem(emptyItem);
             return;
         }
@@ -187,16 +197,16 @@ export default class PequenUSBExtension extends Extension.Extension {
 
             let devId = parseInt(r.device_id, 10);
             if (!isNaN(devId)) {
-                let allowPermItem = new PopupMenu.PopupMenuItem(_tr('allow_perm'));
-                allowPermItem.connect('activate', () => this._applyPolicy(devId, 'allow', true));
+                let allowPermItem = new PopupMenu.PopupMenuItem(this._tr('allow_perm'));
+                allowPermItem.connectObject('activate', () => this._applyPolicy(devId, 'allow', true), this);
                 histItem.menu.addMenuItem(allowPermItem);
 
-                let allowTempItem = new PopupMenu.PopupMenuItem(_tr('allow_temp'));
-                allowTempItem.connect('activate', () => this._applyPolicy(devId, 'allow', false));
+                let allowTempItem = new PopupMenu.PopupMenuItem(this._tr('allow_temp'));
+                allowTempItem.connectObject('activate', () => this._applyPolicy(devId, 'allow', false), this);
                 histItem.menu.addMenuItem(allowTempItem);
 
-                let blockItem = new PopupMenu.PopupMenuItem(_tr('block'));
-                blockItem.connect('activate', () => this._applyPolicy(devId, 'block', false));
+                let blockItem = new PopupMenu.PopupMenuItem(this._tr('block'));
+                blockItem.connectObject('activate', () => this._applyPolicy(devId, 'block', false), this);
                 histItem.menu.addMenuItem(blockItem);
             }
 
@@ -208,24 +218,27 @@ export default class PequenUSBExtension extends Extension.Extension {
         if (!this._proxy) return;
         this._proxy.ApplyPolicyRemote(devId, action, permanent, (result, error) => {
             if (error) return;
-            let typeLabel = permanent ? _tr('status_perm') : _tr('status_temp');
-            Main.notify(_tr('title'), _tr('notify_policy', { id: devId, action: action.toUpperCase(), type: typeLabel }));
+            let typeLabel = permanent ? this._tr('status_perm') : this._tr('status_temp');
+            Main.notify(this._tr('title'), this._tr('notify_policy', { id: devId, action: action.toUpperCase(), type: typeLabel }));
             this._refreshAll();
         });
     }
 
     _notifyDeviceInserted(devId, name, detailsJson) {
-        let title = _tr('alert_title');
-        let body = _tr('alert_body', { name: name });
+        let title = this._tr('alert_title');
+        let body = this._tr('alert_body', { name: name });
         Main.notify(title, body);
     }
 
     disable() {
-        if (this._signalId && this._proxy) {
-            this._proxy.disconnectSignal(this._signalId);
-            this._signalId = null;
+        if (this._proxy) {
+            this._proxy.disconnectObject(this);
+            this._proxy = null;
         }
-        this._proxy = null;
+
+        if (this._indicator) {
+            this._indicator.disconnectObject(this);
+        }
 
         if (this._devicesSection) {
             this._devicesSection.destroy();
