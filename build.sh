@@ -14,7 +14,7 @@ fi
 
 # 2. Empaquetar Extensión de GNOME Shell (.zip)
 echo "[*] Creando paquete zip para extensions.gnome.org..."
-(cd gnome-extension && zip -FS -r pequen-usb@esfingex.github.io.shell-extension.zip metadata.json extension.js prefs.js stylesheet.css schemas/ -x "*.zip")
+(cd gnome-extension && zip -FS -r pequen-usb@esfingex.github.io.shell-extension.zip metadata.json extension.js prefs.js stylesheet.css schemas/ -x "*.zip" -x "schemas/gschemas.compiled")
 
 # 3. Compilar paquete Python (Wheel / Dist)
 echo "[*] Compilando paquete Python en dist/..."
