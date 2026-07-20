@@ -5,6 +5,8 @@ __pycache__/
 dist/
 build/
 *.zip
+gschemas.compiled
+.venv/
 .pytest_cache/
 
 # Alicanto AI Tools ecosystem (internal development workflow)
