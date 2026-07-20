@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pequen-usb",
-    version="1.0.0",
+    version="1.0.2",
     description="Chilean Owl USBGuard Sentinel & History Daemon for GNOME Shell",
     author="Iván Masías (esfingex)",
     license="GPL-3.0-or-later",
