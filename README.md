@@ -54,3 +54,10 @@ pequen-usb block 5
 - **Front-end**: Extensión nativa de GNOME Shell ESM (JavaScript GJS).
 - **Back-end**: Servicio demonio en Python 3.10+ (`pequen-usb-daemon`) conectado a DBus (`org.usbguard` / `org.usbguard1`).
 - **Persistencia**: Base de datos SQLite en `~/.config/pequen-usb/history.db`.
+
+---
+
+## 📜 Licencia
+
+Este proyecto está liberado bajo la licencia pública **GNU General Public License v3.0 (GPL-3.0)**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+

@@ -6,3 +6,7 @@ dist/
 build/
 *.zip
 .pytest_cache/
+
+# Alicanto AI Tools ecosystem (internal development workflow)
+.planning/
+AGENT.md
