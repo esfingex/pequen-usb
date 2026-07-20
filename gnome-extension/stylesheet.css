@@ -1,0 +1,10 @@
+/* Pequén USB Top Bar Menu Styling */
+.pequen-status-allowed {
+    color: #2ec27e;
+    font-weight: bold;
+}
+
+.pequen-status-blocked {
+    color: #e01b24;
+    font-weight: bold;
+}
