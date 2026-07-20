@@ -32,17 +32,8 @@ else
     echo "✅ USBGuard está instalado en el sistema."
 fi
 
-# 2. Check & Enable systemd service for USBGuard
-if command -v systemctl >/dev/null 2>&1; then
-    if ! systemctl is-active --quiet usbguard.service; then
-        echo "[*] Habilitando e iniciando el servicio systemd usbguard..."
-        sudo systemctl enable --now usbguard.service || true
-    else
-        echo "✅ El servicio usbguard.service ya está activo."
-    fi
-fi
+# 2. Install Python package locally
 
-# 3. Install Python package locally
 echo "[*] Instalando paquete Python de Pequén USB..."
 python3 -m pip install -e . --no-deps 2>/dev/null || python3 -m pip install -e . --break-system-packages
 
