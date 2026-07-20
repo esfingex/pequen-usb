@@ -1,7 +1,7 @@
 # 🦉 Pequén USB - Chilean Owl USBGuard Sentinel for GNOME Shell
 
-[![Get it on GNOME Extensions](https://img.shields.io/badge/Get%20it%20on-GNOME%20Extensions-4a86e8?style=for-the-badge&logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/pequen-usb@esfingex.github.io)
-[![GNOME Shell 45-50+](https://img.shields.io/badge/GNOME%20Shell-45--50%2B-blue?style=for-the-badge&logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/pequen-usb@esfingex.github.io)
+[![Get it on GNOME Extensions](https://img.shields.io/badge/Get%20it%20on-GNOME%20Extensions-4a86e8?style=for-the-badge&logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/10455/pequen-usb/)
+[![GNOME Shell 45-50+](https://img.shields.io/badge/GNOME%20Shell-45--50%2B-blue?style=for-the-badge&logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/10455/pequen-usb/)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20%2F%20CachyOS-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://cachyos.org)
 [![Static Analysis: Shexli Clean](https://img.shields.io/badge/Shexli-Clean%200%20Errors-brightgreen?style=for-the-badge)](https://gjs.guide)
