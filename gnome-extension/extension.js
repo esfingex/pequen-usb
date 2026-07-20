@@ -129,8 +129,8 @@ export default class PequenUSBExtension extends Extension.Extension {
     _updateMenuDevices(devices) {
         this._devicesSection.removeAll();
 
-        // Filter for removable devices OR user-pinned quick access devices
-        let quickAccessDevices = devices.filter(dev => dev.category !== 'system' || dev.is_pinned);
+        // Filter strictly for removable storage devices (Pendrives/Discos) OR user-pinned devices
+        let quickAccessDevices = devices.filter(dev => dev.category === 'storage' || dev.is_pinned);
 
         if (quickAccessDevices.length === 0) {
             let emptyItem = new PopupMenu.PopupMenuItem(_tr('no_devices'), { reactive: false });
