@@ -29,7 +29,13 @@ rtk python3 -m pytest
 
 ## Estándares del Proyecto
 1. **Python 3.10+**: Anotaciones de tipos de unión (`list[str] | None`), `match/case`, y uso exclusivo de `pathlib.Path`.
-2. **GNOME Extension (GJS ESM)**: Compatible con GNOME Shell 45 a 50+.
+2. **GNOME Shell Extension Standard (GNOME 45+ EGO Guidelines)**:
+   - Compatible con GNOME Shell 45 a 50+.
+   - `metadata.json`: Solo claves estándar (`uuid`, `name`, `description`, `shell-version`, `url`, `version`, `gettext-domain`, `settings-schema`). Prohibidas claves no estándar (`license`, `author`, `contributors`).
+   - `build.sh`: NUNCA incluir `schemas/gschemas.compiled` ni imágenes PNG en el archivo `.zip` para EGO.
+   - Sin ejecución global: No instanciar proxies DBus ni ejecutar funciones en el scope global del módulo.
+   - Ciclo de vida de señales: Usar exclusivamente `connectObject()` y `disconnectObject()`.
+   - Reinicio de sistema: Usar `SystemActions.getDefault().activateRestart()`, NUNCA `Util.spawn()`.
 3. **Planificación GSD**: Documentación en `.planning/` (`PROJECT.md`, `ROADMAP.md`, `STATE.md`, `CONSTITUTION.md`, `CHECKLIST.md`, `continue-here.md`).
 
 ## Información del Proyecto
