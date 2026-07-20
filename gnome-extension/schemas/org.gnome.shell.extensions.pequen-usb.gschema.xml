@@ -3,8 +3,13 @@
   <schema id="org.gnome.shell.extensions.pequen-usb" path="/org/gnome/shell/extensions/pequen-usb/">
     <key name="show-system-devices" type="b">
       <default>false</default>
-      <summary>Show system devices in menu</summary>
-      <description>Whether to show system devices in top bar menu.</description>
+      <summary>Show system devices in top bar menu</summary>
+      <description>Whether to show internal system devices in top bar menu.</description>
+    </key>
+    <key name="notify-on-insert" type="b">
+      <default>true</default>
+      <summary>Notify on device insertion</summary>
+      <description>Show alert notification when a new USB device is inserted.</description>
     </key>
   </schema>
 </schemalist>

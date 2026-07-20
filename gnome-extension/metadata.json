@@ -13,5 +13,7 @@
   "settings-schema": "org.gnome.shell.extensions.pequen-usb",
   "gettext-domain": "pequen-usb",
   "url": "https://github.com/esfingex/pequen-usb",
-  "version": 1
+  "version": 1,
+  "author": "Iván Masías",
+  "license": "GPL-3.0-or-later"
 }

@@ -5,7 +5,8 @@ setup(
     name="pequen-usb",
     version="1.0.0",
     description="Chilean Owl USBGuard Sentinel & History Daemon for GNOME Shell",
-    author="esfingex",
+    author="Iván Masías (esfingex)",
+    license="GPL-3.0-or-later",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     entry_points={
