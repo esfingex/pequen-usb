@@ -46,7 +46,39 @@ fi
 echo "[*] Instalando paquete Python de Pequén USB..."
 python3 -m pip install -e . --no-deps 2>/dev/null || python3 -m pip install -e . --break-system-packages
 
-# 4. Build & Install GNOME Shell Extension
+# 4. Setup Pequén USB Daemon User Service & DBus activation
+BIN_PATH="$(which pequen-usb-daemon 2>/dev/null || echo "$HOME/.local/bin/pequen-usb-daemon")"
+
+echo "[*] Configurando activador DBus y servicio de usuario systemd..."
+mkdir -p "$HOME/.local/share/dbus-1/services"
+cat << EOF > "$HOME/.local/share/dbus-1/services/org.pequen.USBGuard.service"
+[D-BUS Service]
+Name=org.pequen.USBGuard
+Exec=${BIN_PATH}
+EOF
+
+mkdir -p "$HOME/.config/systemd/user"
+cat << EOF > "$HOME/.config/systemd/user/pequen-usb-daemon.service"
+[Unit]
+Description=Pequén USB Sentinel Daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=${BIN_PATH}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload || true
+    systemctl --user enable --now pequen-usb-daemon.service || true
+fi
+
+# 5. Build & Install GNOME Shell Extension
 echo "[*] Empaquetando extensión de GNOME Shell..."
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/pequen-usb@esfingex.github.io"
 mkdir -p "$EXT_DIR"
@@ -56,5 +88,5 @@ echo "[*] Habilitando extensión pequen-usb@esfingex.github.io..."
 gnome-extensions enable pequen-usb@esfingex.github.io || true
 
 echo ""
-echo "✅ ¡Pequén USB e dependencias instaladas con éxito!"
-echo "👉 Puedes iniciar el demonio con: pequen-usb-daemon"
+echo "✅ ¡Pequén USB, demonio y extensión instalados con éxito!"
+echo "🦉 El icono de Pequén USB Sentinel debería aparecer ahora en la barra superior."
