@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.pequen-usb" path="/org/gnome/shell/extensions/pequen-usb/">
+    <key name="show-system-devices" type="b">
+      <default>false</default>
+      <summary>Show system devices in menu</summary>
+      <description>Whether to show system devices in top bar menu.</description>
+    </key>
+  </schema>
+</schemalist>

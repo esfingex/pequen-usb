@@ -78,11 +78,15 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl --user enable --now pequen-usb-daemon.service || true
 fi
 
-# 5. Build & Install GNOME Shell Extension
+# 5. Build & Install GNOME Shell Extension & GSchemas
 echo "[*] Empaquetando extensión de GNOME Shell..."
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/pequen-usb@esfingex.github.io"
 mkdir -p "$EXT_DIR"
-cp gnome-extension/* "$EXT_DIR/"
+cp -r gnome-extension/* "$EXT_DIR/"
+
+if command -v glib-compile-schemas >/dev/null 2>&1; then
+    glib-compile-schemas "$EXT_DIR/schemas/" || true
+fi
 
 echo "[*] Habilitando extensión pequen-usb@esfingex.github.io..."
 gnome-extensions enable pequen-usb@esfingex.github.io || true

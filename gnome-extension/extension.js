@@ -56,7 +56,7 @@ export default class PequenUSBExtension extends Extension.Extension {
 
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        // Devices Section
+        // Quick Access Devices Section (Removable Storage & Pinned)
         this._devicesSection = new PopupMenu.PopupMenuSection();
         this._indicator.menu.addMenuItem(this._devicesSection);
 
@@ -72,6 +72,11 @@ export default class PequenUSBExtension extends Extension.Extension {
         let refreshItem = new PopupMenu.PopupMenuItem(_tr('refresh'));
         refreshItem.connect('activate', () => this._refreshAll());
         this._indicator.menu.addMenuItem(refreshItem);
+
+        // Settings / Preferences Window MenuItem
+        let prefsItem = new PopupMenu.PopupMenuItem(_tr('more_settings'));
+        prefsItem.connect('activate', () => this.openPreferences());
+        this._indicator.menu.addMenuItem(prefsItem);
 
         Main.panel.addToStatusArea('pequen-usb', this._indicator);
 
@@ -124,18 +129,21 @@ export default class PequenUSBExtension extends Extension.Extension {
     _updateMenuDevices(devices) {
         this._devicesSection.removeAll();
 
-        if (devices.length === 0) {
+        // Filter for removable devices OR user-pinned quick access devices
+        let quickAccessDevices = devices.filter(dev => dev.category !== 'system' || dev.is_pinned);
+
+        if (quickAccessDevices.length === 0) {
             let emptyItem = new PopupMenu.PopupMenuItem(_tr('no_devices'), { reactive: false });
             this._devicesSection.addMenuItem(emptyItem);
             return;
         }
 
-        devices.forEach(dev => {
+        quickAccessDevices.forEach(dev => {
             let statusBadge = dev.is_allowed
                 ? (dev.is_permanent ? `🟢 [${_tr('status_perm')}]` : `🟡 [${_tr('status_temp')}]`)
                 : `🔴 [${_tr('status_blocked')}]`;
 
-            let labelText = `${dev.name} (${dev.id}) ${statusBadge}`;
+            let labelText = `${dev.name} ${statusBadge}`;
             let menuItem = new PopupMenu.PopupSubMenuMenuItem(labelText);
 
             let allowPermItem = new PopupMenu.PopupMenuItem(_tr('allow_perm'));

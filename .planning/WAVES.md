@@ -14,46 +14,29 @@ This document maintains the persistent version history and specification logs fo
 | **Wave 4** | Build & Verification | `install.sh`, `tests/` | ✅ Complete | Unit tests suite (`test_pequen.py`), local wheel installation. |
 | **Wave 5** | Installer & Systemd | `install.sh` | ✅ Complete | `pacman`/`apt`/`dnf` package installation check & `usbguard.service` systemd enablement. |
 | **Wave 6** | Planning & Docs | `.planning/` | ✅ Complete | Text version control log (`WAVES.md`), ADR-004 architecture sync. |
+| **Wave 7** | Categorization Engine | `src/pequen_usb/` | ✅ Complete | Sysfs inspector for `storage`, `system`, and `peripheral` categorization & `config.py` JSON manager. |
+| **Wave 8** | GTK4 Preferences UI | `gnome-extension/prefs.js` | ✅ Complete | Libadwaita preferences window with Extraíbles, Sistema, and Accesos Rápidos tabbed pages. |
+| **Wave 9** | Sober Top Bar Menu | `gnome-extension/extension.js` | ✅ Complete | Clean top bar popup for storage & pinned devices + **⚙️ Más Ajustes...** button. |
 
 ---
 
 ## 📋 Wave Details & History
 
-### 🌊 Wave 1: Core i18n Engine & Extended DBus Data Model
+### 🌊 Wave 7: Device Categorization & Config Persistence Engine
 - **Date**: 2026-07-20
 - **Files Created/Modified**:
-  - `src/pequen_usb/i18n.py` [NEW]: System locale auto-detection and translation dictionaries (Spanish/English).
-  - `src/pequen_usb/dbus_client.py` [MODIFY]: Added `is_permanent` property and `rule_type` ("permanent", "temporary", "blocked").
-  - `src/pequen_usb/history.py` [MODIFY]: Added `get_permanence_map()` to query latest rule permanence from DB.
-  - `src/pequen_usb/daemon.py` [MODIFY]: Exposed `rule_type` in DBus `GetDevices()` and localized logger.
+  - `src/pequen_usb/config.py` [NEW]: Persistent configuration manager (`~/.config/pequen-usb/config.json`).
+  - `src/pequen_usb/dbus_client.py` [MODIFY]: Sysfs inspector parsing `/sys/bus/usb/devices/` to classify devices into `storage`, `system`, or `peripheral`.
+  - `src/pequen_usb/daemon.py` [MODIFY]: Added DBus methods `GetConfig()`, `TogglePin()`, and `ConfigChanged` signal.
 
-### 🌊 Wave 2: CLI Multi-language & Enhanced History Views
+### 🌊 Wave 8: GTK4 Preferences Window (`prefs.js`)
 - **Date**: 2026-07-20
 - **Files Created/Modified**:
-  - `src/pequen_usb/cli.py` [MODIFY]: Added `--lang es|en` override, localized status output: `🟢 PERMITIDO (Permanente)`, `🟡 PERMITIDO (Temporal)`, `🔴 BLOQUEADO`.
+  - `gnome-extension/prefs.js` [NEW]: Libadwaita / GTK4 preference window with tabbed pages for Removable Storage, System Devices, and Quick Access Pinning.
+  - `gnome-extension/schemas/` [NEW]: Added compiled GSettings schema for extension settings.
 
-### 🌊 Wave 3: GNOME Extension i18n & Interactive History UI
+### 🌊 Wave 9: Sober Panel Menu & Quick Access Pinning
 - **Date**: 2026-07-20
 - **Files Created/Modified**:
-  - `gnome-extension/i18n.js` [NEW]: GJS ES-Module locale detector and dictionary resolver.
-  - `gnome-extension/extension.js` [MODIFY]:
-    - Added status badges to connected USB devices menu.
-    - Replaced transient popup notification with interactive `PopupSubMenuMenuItem` history menu allowing direct policy changes.
-
-### 🌊 Wave 4: Installer Update & System Integration Verification
-- **Date**: 2026-07-20
-- **Files Created/Modified**:
-  - `install.sh` [MODIFY]: Package `i18n.js` into GNOME extension folder.
-  - `tests/test_pequen.py` [NEW]: Automated test suite covering parser, i18n, DBus model, and HistoryManager.
-
-### 🌊 Wave 5: System Dependency Installation & Service Activation
-- **Date**: 2026-07-20
-- **Files Created/Modified**:
-  - `install.sh` [MODIFY]: Auto-detect `pacman` (Arch/CachyOS), `apt`, `dnf`, `zypper` to install `usbguard` if missing. Auto-enable `usbguard.service` via systemd.
-
-### 🌊 Wave 6: Persistent Wave Versioning & Architecture Sync
-- **Date**: 2026-07-20
-- **Files Created/Modified**:
-  - `.planning/WAVES.md` [NEW]: Text file tracking all development waves and releases.
-  - `.planning/STATE.md` [MODIFY]: Recorded ADR-004 (Alicanto GSD planning framework vs SQLite 3 history DB).
-  - `.planning/ROADMAP.md` [MODIFY]: Updated roadmap tasks to reflect Waves 1-6 completion.
+  - `gnome-extension/extension.js` [MODIFY]: Filtered top bar menu to display only pendrives/storage devices or pinned items for a clean, sober view. Added **⚙️ Más Ajustes...** launcher.
+  - `install.sh` [MODIFY]: Added gschema compilation and installation.

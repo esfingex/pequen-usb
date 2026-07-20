@@ -10,6 +10,8 @@
     "49",
     "50"
   ],
+  "settings-schema": "org.gnome.shell.extensions.pequen-usb",
+  "gettext-domain": "pequen-usb",
   "url": "https://github.com/esfingex/pequen-usb",
   "version": 1
 }

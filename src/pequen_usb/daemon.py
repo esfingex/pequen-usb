@@ -6,6 +6,7 @@ from gi.repository import GLib
 
 from pequen_usb.dbus_client import USBGuardDBusClient, USBGuardRuleParser, USBDevice
 from pequen_usb.history import HistoryManager
+from pequen_usb.config import ConfigManager
 from pequen_usb.i18n import t
 
 
@@ -22,9 +23,10 @@ class PequénSessionService(dbus.service.Object):
 
     @dbus.service.method("org.pequen.USBGuard", in_signature="", out_signature="s")
     def GetDevices(self) -> str:
-        """Returns JSON list of active devices with rule status and permanence."""
+        """Returns JSON list of active devices with rule status, category, and pinning."""
         perm_map = self.daemon.history.get_permanence_map()
-        devices = self.daemon.client.get_all_devices(permanent_map=perm_map)
+        pinned_set = set(self.daemon.config.get("pinned_devices", []))
+        devices = self.daemon.client.get_all_devices(permanent_map=perm_map, pinned_set=pinned_set)
         return json.dumps([d.to_dict() for d in devices])
 
     @dbus.service.method("org.pequen.USBGuard", in_signature="i", out_signature="s")
@@ -38,7 +40,6 @@ class PequénSessionService(dbus.service.Object):
         """Applies policy (allow/block/reject) to a device."""
         try:
             self.daemon.client.apply_policy(device_id, action, permanent)
-            # Find device info for logging
             perm_map = self.daemon.history.get_permanence_map()
             devices = self.daemon.client.get_all_devices(permanent_map=perm_map)
             target_dev = next((d for d in devices if d.number == device_id), None)
@@ -61,6 +62,18 @@ class PequénSessionService(dbus.service.Object):
             print(f"Error applying policy: {err}")
             return False
 
+    @dbus.service.method("org.pequen.USBGuard", in_signature="", out_signature="s")
+    def GetConfig(self) -> str:
+        """Returns configuration JSON."""
+        return json.dumps(self.daemon.config.config)
+
+    @dbus.service.method("org.pequen.USBGuard", in_signature="s", out_signature="b")
+    def TogglePin(self, dev_id_str: str) -> bool:
+        """Toggles quick access pinning for a device ID or HW ID."""
+        is_pinned = self.daemon.config.toggle_pin(dev_id_str)
+        self.ConfigChanged(json.dumps(self.daemon.config.config))
+        return is_pinned
+
     @dbus.service.signal("org.pequen.USBGuard", signature="iss")
     def DeviceInserted(self, device_id: int, name: str, details_json: str) -> None:
         """Signal emitted when a new device is connected."""
@@ -71,6 +84,11 @@ class PequénSessionService(dbus.service.Object):
         """Signal emitted when a device policy is changed."""
         pass
 
+    @dbus.service.signal("org.pequen.USBGuard", signature="s")
+    def ConfigChanged(self, config_json: str) -> None:
+        """Signal emitted when configuration is updated."""
+        pass
+
 
 class PequénDaemon:
     """Main Pequén USB Daemon listener."""
@@ -78,6 +96,7 @@ class PequénDaemon:
     def __init__(self):
         DBusGMainLoop(set_as_default=True)
         self.history = HistoryManager()
+        self.config = ConfigManager()
         self.client = USBGuardDBusClient()
         self.service = PequénSessionService(self)
         self._setup_signals()
@@ -92,7 +111,13 @@ class PequénDaemon:
     ) -> None:
         parsed = USBGuardRuleParser.parse(str(device_rule))
         perm_map = self.history.get_permanence_map()
-        device = USBDevice(int(dev_id), parsed, is_permanent=perm_map.get(int(dev_id), False))
+        pinned_set = set(self.config.get("pinned_devices", []))
+        device = USBDevice(
+            int(dev_id),
+            parsed,
+            is_permanent=perm_map.get(int(dev_id), False),
+            is_pinned=str(dev_id) in pinned_set,
+        )
 
         print(t("device_event", id=dev_id, rule=device.rule, name=device.name))
 

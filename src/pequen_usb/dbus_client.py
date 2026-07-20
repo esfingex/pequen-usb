@@ -1,4 +1,5 @@
 import shlex
+from pathlib import Path
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 
@@ -39,7 +40,13 @@ class USBGuardRuleParser:
 class USBDevice:
     """Represents a USB device connected via USBGuard DBus."""
 
-    def __init__(self, number: int, rule_dict: dict[str, str | list[str]], is_permanent: bool = False):
+    def __init__(
+        self,
+        number: int,
+        rule_dict: dict[str, str | list[str]],
+        is_permanent: bool = False,
+        is_pinned: bool = False,
+    ):
         self.number = number
         self.rule = str(rule_dict.get("rule", "block"))
         self.id = str(rule_dict.get("id", ""))
@@ -49,9 +56,52 @@ class USBDevice:
         self.parent_hash = str(rule_dict.get("parent_hash", ""))
         self.via_port = str(rule_dict.get("via_port", ""))
         self.is_permanent = is_permanent
+        self.is_pinned = is_pinned
         self.with_interface = rule_dict.get("with_interface", [])
         if isinstance(self.with_interface, str):
             self.with_interface = [self.with_interface]
+
+        self.category = self._detect_category()
+
+    def _detect_category(self) -> str:
+        """Classifies device into 'storage', 'system', or 'peripheral' based on interfaces & sysfs."""
+        ifaces = [str(iface) for iface in self.with_interface]
+        name_lower = self.name.lower()
+
+        # Check for mass storage interfaces (class 08) or name
+        is_mass_storage = any(iface.startswith("08:") or iface == "08" for iface in ifaces) or any(
+            kw in name_lower for kw in ["flash", "drive", "disk", "storage", "mass storage", "kingston", "sandisk"]
+        )
+        if is_mass_storage:
+            return "storage"
+
+        # Check for system hubs (class 09), webcams (0e), bluetooth (e0) or root hubs
+        is_system_dev = (
+            any(iface.startswith("09:") or iface.startswith("0e:") or iface.startswith("e0:") for iface in ifaces)
+            or "root hub" in name_lower
+            or "linux foundation" in name_lower
+            or "bluetooth" in name_lower
+            or "camera" in name_lower
+            or "webcam" in name_lower
+        )
+        if is_system_dev:
+            return "system"
+
+        # Check sysfs removable attribute if via_port matches
+        if self.via_port:
+            port_name = self.via_port.strip('"')
+            sysfs_removable = Path(f"/sys/bus/usb/devices/{port_name}/removable")
+            if sysfs_removable.exists():
+                try:
+                    val = sysfs_removable.read_text().strip()
+                    if val == "fixed":
+                        return "system"
+                    elif val == "removable":
+                        return "storage" if is_mass_storage else "peripheral"
+                except Exception:
+                    pass
+
+        return "peripheral"
 
     @property
     def is_allowed(self) -> bool:
@@ -77,6 +127,8 @@ class USBDevice:
             "rule": self.rule,
             "rule_type": self.rule_type,
             "is_permanent": self.is_permanent,
+            "is_pinned": self.is_pinned,
+            "category": self.category,
             "id": self.id,
             "name": self.name,
             "serial": self.serial,
@@ -107,16 +159,22 @@ class USBGuardDBusClient:
             self.devices_iface = dbus.Interface(dev_obj, "org.usbguard.Devices1")
             self.policy_iface = dbus.Interface(pol_obj, "org.usbguard.Policy1")
 
-    def get_all_devices(self, permanent_map: dict[int, bool] | None = None) -> list[USBDevice]:
+    def get_all_devices(
+        self,
+        permanent_map: dict[int, bool] | None = None,
+        pinned_set: set[str] | None = None,
+    ) -> list[USBDevice]:
         raw_devices = self.devices_iface.listDevices("match")
         devices = []
         perm_map = permanent_map or {}
+        p_set = pinned_set or set()
         for dev_struct in raw_devices:
             dev_id = int(dev_struct[0])
             rule_str = str(dev_struct[1])
             parsed = USBGuardRuleParser.parse(rule_str)
             is_perm = perm_map.get(dev_id, False)
-            devices.append(USBDevice(dev_id, parsed, is_permanent=is_perm))
+            is_pinned = str(dev_id) in p_set or str(parsed.get("id", "")) in p_set
+            devices.append(USBDevice(dev_id, parsed, is_permanent=is_perm, is_pinned=is_pinned))
         return devices
 
     def apply_policy(self, device_id: int, target: str, permanent: bool = False) -> int:
