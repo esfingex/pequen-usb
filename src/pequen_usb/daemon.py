@@ -6,6 +6,7 @@ from gi.repository import GLib
 
 from pequen_usb.dbus_client import USBGuardDBusClient, USBGuardRuleParser, USBDevice
 from pequen_usb.history import HistoryManager
+from pequen_usb.i18n import t
 
 
 class PequénSessionService(dbus.service.Object):
@@ -21,8 +22,9 @@ class PequénSessionService(dbus.service.Object):
 
     @dbus.service.method("org.pequen.USBGuard", in_signature="", out_signature="s")
     def GetDevices(self) -> str:
-        """Returns JSON list of active devices."""
-        devices = self.daemon.client.get_all_devices()
+        """Returns JSON list of active devices with rule status and permanence."""
+        perm_map = self.daemon.history.get_permanence_map()
+        devices = self.daemon.client.get_all_devices(permanent_map=perm_map)
         return json.dumps([d.to_dict() for d in devices])
 
     @dbus.service.method("org.pequen.USBGuard", in_signature="i", out_signature="s")
@@ -37,7 +39,8 @@ class PequénSessionService(dbus.service.Object):
         try:
             self.daemon.client.apply_policy(device_id, action, permanent)
             # Find device info for logging
-            devices = self.daemon.client.get_all_devices()
+            perm_map = self.daemon.history.get_permanence_map()
+            devices = self.daemon.client.get_all_devices(permanent_map=perm_map)
             target_dev = next((d for d in devices if d.number == device_id), None)
 
             name = target_dev.name if target_dev else f"Device {device_id}"
@@ -88,9 +91,10 @@ class PequénDaemon:
         self, dev_id: int, event: int, target: int, device_rule: str, attributes: dict
     ) -> None:
         parsed = USBGuardRuleParser.parse(str(device_rule))
-        device = USBDevice(int(dev_id), parsed)
+        perm_map = self.history.get_permanence_map()
+        device = USBDevice(int(dev_id), parsed, is_permanent=perm_map.get(int(dev_id), False))
 
-        print(f"[Pequén] Device event: ID={dev_id}, Event={event}, Rule={device.rule}, Name='{device.name}'")
+        print(t("device_event", id=dev_id, rule=device.rule, name=device.name))
 
         # Event: 1 = INSERT, 0 = PRESENT, 3 = REMOVE
         if event in (0, 1) and not device.is_allowed:
@@ -107,7 +111,7 @@ class PequénDaemon:
             self.service.DeviceInserted(int(dev_id), device.name, json.dumps(device.to_dict()))
 
     def run(self) -> None:
-        print("[Pequén] Pequén USB Daemon listening on session DBus ('org.pequen.USBGuard')...")
+        print(t("daemon_listening"))
         loop = GLib.MainLoop()
         loop.run()
 

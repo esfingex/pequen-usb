@@ -89,6 +89,25 @@ class HistoryManager:
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
+    def get_permanence_map(self) -> dict[int, bool]:
+        """Returns dict mapping int device_id -> bool is_permanent based on latest action."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT device_id, permanent
+                FROM usb_history
+                WHERE id IN (SELECT MAX(id) FROM usb_history GROUP BY device_id)
+            """)
+            rows = cursor.fetchall()
+            result = {}
+            for row in rows:
+                try:
+                    dev_id = int(row["device_id"])
+                    result[dev_id] = bool(row["permanent"])
+                except ValueError:
+                    pass
+            return result
+
     def clear_history(self) -> None:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM usb_history")

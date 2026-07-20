@@ -39,7 +39,7 @@ class USBGuardRuleParser:
 class USBDevice:
     """Represents a USB device connected via USBGuard DBus."""
 
-    def __init__(self, number: int, rule_dict: dict[str, str | list[str]]):
+    def __init__(self, number: int, rule_dict: dict[str, str | list[str]], is_permanent: bool = False):
         self.number = number
         self.rule = str(rule_dict.get("rule", "block"))
         self.id = str(rule_dict.get("id", ""))
@@ -48,6 +48,7 @@ class USBDevice:
         self.hash = str(rule_dict.get("hash", ""))
         self.parent_hash = str(rule_dict.get("parent_hash", ""))
         self.via_port = str(rule_dict.get("via_port", ""))
+        self.is_permanent = is_permanent
         self.with_interface = rule_dict.get("with_interface", [])
         if isinstance(self.with_interface, str):
             self.with_interface = [self.with_interface]
@@ -55,6 +56,12 @@ class USBDevice:
     @property
     def is_allowed(self) -> bool:
         return self.rule.lower() == "allow"
+
+    @property
+    def rule_type(self) -> str:
+        if self.is_allowed:
+            return "permanent" if self.is_permanent else "temporary"
+        return "blocked"
 
     @property
     def vendor_id(self) -> str:
@@ -68,6 +75,8 @@ class USBDevice:
         return {
             "number": self.number,
             "rule": self.rule,
+            "rule_type": self.rule_type,
+            "is_permanent": self.is_permanent,
             "id": self.id,
             "name": self.name,
             "serial": self.serial,
@@ -98,14 +107,16 @@ class USBGuardDBusClient:
             self.devices_iface = dbus.Interface(dev_obj, "org.usbguard.Devices1")
             self.policy_iface = dbus.Interface(pol_obj, "org.usbguard.Policy1")
 
-    def get_all_devices(self) -> list[USBDevice]:
+    def get_all_devices(self, permanent_map: dict[int, bool] | None = None) -> list[USBDevice]:
         raw_devices = self.devices_iface.listDevices("match")
         devices = []
+        perm_map = permanent_map or {}
         for dev_struct in raw_devices:
             dev_id = int(dev_struct[0])
             rule_str = str(dev_struct[1])
             parsed = USBGuardRuleParser.parse(rule_str)
-            devices.append(USBDevice(dev_id, parsed))
+            is_perm = perm_map.get(dev_id, False)
+            devices.append(USBDevice(dev_id, parsed, is_permanent=is_perm))
         return devices
 
     def apply_policy(self, device_id: int, target: str, permanent: bool = False) -> int:

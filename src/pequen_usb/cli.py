@@ -1,65 +1,103 @@
 import sys
 from pequen_usb.dbus_client import USBGuardDBusClient
 from pequen_usb.history import HistoryManager
+from pequen_usb.i18n import t, set_language
 
 
 def print_help():
-    print("""
-Pequén USB - Chilean Owl USBGuard Sentinel CLI
+    print(f"""
+{t('cli_help_title')}
 
-Usage:
-  pequen-usb devices          List connected USB devices and their current status
-  pequen-usb history          Show recent connection history
-  pequen-usb allow <id> [--temp] Allow a USB device by ID
-  pequen-usb block <id>       Block a USB device by ID
-  pequen-usb clear-history    Clear SQLite connection history
+{t('cli_usage')}
+  pequen-usb {t('cmd_devices')}
+  pequen-usb {t('cmd_history')}
+  pequen-usb {t('cmd_allow')}
+  pequen-usb {t('cmd_block')}
+  pequen-usb {t('cmd_clear_history')}
+
+Flags:
+  --lang es|en    Force language selection (Seleccionar idioma)
 """)
 
 
 def main():
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+
+    # Parse --lang flag if present
+    if "--lang" in args:
+        idx = args.index("--lang")
+        if idx + 1 < len(args):
+            set_language(args[idx + 1])
+            del args[idx : idx + 2]
+
+    if not args:
         print_help()
         return
 
-    cmd = sys.argv[1]
+    cmd = args[0]
     match cmd:
         case "devices":
+            history = HistoryManager()
+            perm_map = history.get_permanence_map()
             client = USBGuardDBusClient()
-            devices = client.get_all_devices()
-            print(f"\n--- Connected USB Devices ({len(devices)}) ---")
+            devices = client.get_all_devices(permanent_map=perm_map)
+
+            print(f"\n{t('hdr_devices', count=len(devices))}")
             for dev in devices:
-                status = "ALLOWED" if dev.is_allowed else "BLOCKED"
-                print(f"[{dev.number}] {status} - ID: {dev.id} - {dev.name} ({dev.via_port})")
+                if dev.is_allowed:
+                    status = t("status_allowed_perm") if dev.is_permanent else t("status_allowed_temp")
+                    badge = "🟢" if dev.is_permanent else "🟡"
+                else:
+                    status = t("status_blocked")
+                    badge = "🔴"
+
+                print(f"{badge} [{dev.number}] {status:<24} | ID: {dev.id:<10} | {dev.name} ({dev.via_port})")
             print()
+
         case "history":
             history = HistoryManager()
             records = history.get_recent_history(limit=25)
-            print(f"\n--- Connection History ({len(records)} entries) ---")
+            print(f"\n{t('hdr_history', count=len(records))}")
             for r in records:
-                perm = " (Permanent)" if r["permanent"] else ""
-                print(f"[{r['timestamp']}] ID:{r['device_id']} - {r['name']} -> {r['action_taken'].upper()}{perm}")
+                perm_str = f" ({t('status_allowed_perm')})" if r["permanent"] else f" ({t('status_allowed_temp')})" if r["action_taken"] == "allow" else ""
+                print(f"[{r['timestamp'][:19]}] ID:{r['device_id']:<3} | {r['name']} -> {r['action_taken'].upper()}{perm_str}")
             print()
+
         case "allow":
-            if len(sys.argv) < 3:
-                print("Error: Specify device ID to allow")
+            if len(args) < 2:
+                print(t("err_specify_allow_id"))
                 return
-            dev_id = int(sys.argv[2])
-            temp = "--temp" in sys.argv
+            try:
+                dev_id = int(args[1])
+            except ValueError:
+                print(t("err_specify_allow_id"))
+                return
+
+            temp = "--temp" in args
             client = USBGuardDBusClient()
             client.apply_policy(dev_id, "allow", permanent=not temp)
-            print(f"Device {dev_id} ALLOWED ({'Temporary' if temp else 'Permanent'})")
+            msg_key = "msg_allowed_temp" if temp else "msg_allowed_perm"
+            print(t(msg_key, id=dev_id))
+
         case "block":
-            if len(sys.argv) < 3:
-                print("Error: Specify device ID to block")
+            if len(args) < 2:
+                print(t("err_specify_block_id"))
                 return
-            dev_id = int(sys.argv[2])
+            try:
+                dev_id = int(args[1])
+            except ValueError:
+                print(t("err_specify_block_id"))
+                return
+
             client = USBGuardDBusClient()
             client.apply_policy(dev_id, "block", permanent=False)
-            print(f"Device {dev_id} BLOCKED")
+            print(t("msg_blocked", id=dev_id))
+
         case "clear-history":
             history = HistoryManager()
             history.clear_history()
-            print("History cleared.")
+            print(t("msg_history_cleared"))
+
         case _:
             print_help()
 
