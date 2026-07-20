@@ -1,5 +1,8 @@
 # 🦉 Pequén USB - Chilean Owl USBGuard Sentinel for GNOME Shell
 
+[![Get it on GNOME Extensions](https://img.shields.io/badge/Get%20it%20on-GNOME%20Extensions-4a86e8?style=for-the-badge&logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/pequen-usb@esfingex.github.io)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
+
 Pequén USB es una extensión nativa para **GNOME Shell 45/50+** y demonio en **Python 3 (v1.0.2)** para el monitoreo, control de permisos e historial de dispositivos USB con **USBGuard**.
 
 Inspirado en el **Pequén** (el búho minero chileno *Athene cunicularia* que vigila la entrada de su refugio), este proyecto actúa como un centinela en la barra superior de tu escritorio Linux.
