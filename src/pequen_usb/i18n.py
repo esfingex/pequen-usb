@@ -60,7 +60,7 @@ def get_system_language() -> str:
     if lang_env.lower().startswith("en"):
         return "en"
     try:
-        sys_loc, _ = locale.getdefaultlocale()
+        sys_loc = locale.getlocale()[0]
         if sys_loc and sys_loc.lower().startswith("en"):
             return "en"
     except Exception:

@@ -1,3 +1,4 @@
+import logging
 import shlex
 from pathlib import Path
 import dbus
@@ -5,6 +6,8 @@ from dbus.mainloop.glib import DBusGMainLoop
 import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib
+
+logger = logging.getLogger("pequen-usb")
 
 
 class USBGuardRuleParser:
@@ -178,7 +181,12 @@ class USBGuardDBusClient:
         permanent_map: dict[int, bool] | None = None,
         pinned_set: set[str] | None = None,
     ) -> list[USBDevice]:
-        raw_devices = self.devices_iface.listDevices("match")
+        try:
+            raw_devices = self.devices_iface.listDevices("match")
+        except (dbus.DBusException, GLib.GError) as err:
+            logger.error(f"Failed to list USBGuard devices via DBus: {err}")
+            return []
+
         devices = []
         perm_map = permanent_map or {}
         p_set = pinned_set or set()
@@ -195,40 +203,23 @@ class USBGuardDBusClient:
         """Applies policy (allow/block/reject) via PolicyKit interactive password prompt if required."""
         rule_num = 0 if target.lower() == "allow" else (1 if target.lower() == "block" else 2)
 
-        # Execute applyDevicePolicy with ALLOW_INTERACTIVE_AUTHORIZATION (triggers GNOME PolKit password dialog)
-        res = self.gio_bus.call_sync(
-            self.service_name,
-            self.devices_path,
-            self.devices_interface,
-            "applyDevicePolicy",
-            GLib.Variant("(uub)", (device_id, rule_num, permanent)),
-            GLib.VariantType("(u)"),
-            Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION,
-            -1,
-            None,
-        )
-        rule_id = res.unpack()[0]
-
-        if permanent and target.lower() == "allow":
-            try:
-                devices = self.get_all_devices()
-                target_dev = next((d for d in devices if d.number == device_id), None)
-                if target_dev:
-                    rule_str = f'allow id {target_dev.id} serial "{target_dev.serial}" name "{target_dev.name}" hash "{target_dev.hash}"'
-                    self.gio_bus.call_sync(
-                        self.service_name,
-                        self.policy_path,
-                        self.policy_interface,
-                        "appendRule",
-                        GLib.Variant("(sub)", (rule_str, 0, True)),
-                        GLib.VariantType("(u)"),
-                        Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION,
-                        -1,
-                        None,
-                    )
-            except Exception as append_err:
-                print(f"[Pequén] Notice: appendRule interactive attempt: {append_err}")
-
-        return rule_id
+        try:
+            # Execute applyDevicePolicy with ALLOW_INTERACTIVE_AUTHORIZATION (triggers PolKit password dialog)
+            res = self.gio_bus.call_sync(
+                self.service_name,
+                self.devices_path,
+                self.devices_interface,
+                "applyDevicePolicy",
+                GLib.Variant("(uub)", (device_id, rule_num, permanent)),
+                GLib.VariantType("(u)"),
+                Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION,
+                -1,
+                None,
+            )
+            rule_id = res.unpack()[0]
+            return rule_id
+        except (GLib.GError, dbus.DBusException) as err:
+            logger.error(f"Error applying USBGuard policy for device {device_id}: {err}")
+            raise
 
 

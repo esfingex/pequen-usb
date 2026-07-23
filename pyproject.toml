@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pequen-usb"
-version = "1.0.1"
+version = "1.0.2"
 description = "Chilean Owl USBGuard Sentinel & History Daemon for GNOME Shell"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "GPL-3.0"}
+license = "GPL-3.0-or-later"
 dependencies = [
     "pygobject",
     "dbus-python"
