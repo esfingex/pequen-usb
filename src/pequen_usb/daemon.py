@@ -32,7 +32,13 @@ class PequénSessionService(dbus.service.Object):
         """Returns JSON list of active devices with rule status, category, and pinning."""
         perm_map = self.daemon.history.get_permanence_map()
         pinned_set = set(self.daemon.config.get("pinned_devices", []))
-        devices = self.daemon.client.get_all_devices(permanent_map=perm_map, pinned_set=pinned_set)
+        devices = []
+        if self.daemon.client:
+            devices = self.daemon.client.get_all_devices(permanent_map=perm_map, pinned_set=pinned_set)
+        if not devices:
+            from pequen_usb.dbus_client import USBGuardDBusClient
+            fallback_client = self.daemon.client or USBGuardDBusClient.__new__(USBGuardDBusClient)
+            devices = fallback_client.get_sysfs_fallback_devices(permanent_map=perm_map, pinned_set=pinned_set)
         return json.dumps([d.to_dict() for d in devices])
 
     @dbus.service.method("org.pequen.USBGuard", in_signature="i", out_signature="s")

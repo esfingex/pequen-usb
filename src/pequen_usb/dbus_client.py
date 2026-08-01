@@ -199,6 +199,42 @@ class USBGuardDBusClient:
             devices.append(USBDevice(dev_id, parsed, is_permanent=is_perm, is_pinned=is_pinned))
         return devices
 
+    def get_sysfs_fallback_devices(
+        self,
+        permanent_map: dict[int, bool] | None = None,
+        pinned_set: set[str] | None = None,
+    ) -> list[USBDevice]:
+        import glob
+        import os
+        perm_map = permanent_map or {}
+        p_set = pinned_set or set()
+        devices = []
+        num = 100
+        for p in sorted(glob.glob("/sys/bus/usb/devices/*")):
+            vendor_path = os.path.join(p, "idVendor")
+            product_path = os.path.join(p, "idProduct")
+            if os.path.exists(vendor_path) and os.path.exists(product_path):
+                try:
+                    with open(vendor_path, 'r') as f: v_id = f.read().strip()
+                    with open(product_path, 'r') as f: p_id = f.read().strip()
+                    dev_name = "USB Device"
+                    name_path = os.path.join(p, "product")
+                    if os.path.exists(name_path):
+                        with open(name_path, 'r') as f: dev_name = f.read().strip()
+                    num += 1
+                    rule_dict = {
+                        "rule": "allow",
+                        "id": f"{v_id}:{p_id}",
+                        "name": dev_name,
+                        "via_port": os.path.basename(p)
+                    }
+                    is_perm = perm_map.get(num, False)
+                    is_pinned = str(num) in p_set or f"{v_id}:{p_id}" in p_set
+                    devices.append(USBDevice(num, rule_dict, is_permanent=is_perm, is_pinned=is_pinned))
+                except Exception:
+                    pass
+        return devices
+
     def apply_policy(self, device_id: int, target: str, permanent: bool = False) -> int:
         """Applies policy (allow/block/reject) via PolicyKit interactive password prompt if required."""
         rule_num = 0 if target.lower() == "allow" else (1 if target.lower() == "block" else 2)
