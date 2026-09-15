@@ -94,6 +94,73 @@ class PequénSessionService(dbus.service.Object):
         self.ConfigChanged(json.dumps(self.daemon.config.config))
         return is_pinned
 
+    @dbus.service.method("org.pequen.USBGuard", in_signature="s", out_signature="bs")
+    def RemountReadWrite(self, mount_point: str) -> tuple[bool, str]:
+        """Re-mounts a device at mount_point as read-write. Returns (success, message)."""
+        import subprocess, re
+        mount_point = mount_point.strip()
+        if not mount_point:
+            return False, "No mount point provided"
+        try:
+            # Find the block device for this mountpoint
+            result = subprocess.run(
+                ["findmnt", "-n", "-o", "SOURCE,OPTIONS", mount_point],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                return False, f"Mount point not found: {mount_point}"
+            parts = result.stdout.strip().split()
+            if not parts:
+                return False, "Could not determine source device"
+            source = parts[0]
+            # Try udisksctl remount first (no password needed for session user)
+            r = subprocess.run(
+                ["udisksctl", "mount", "-b", source, "--options", "rw"],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0:
+                return True, f"Remounted {source} as read-write"
+            # Fallback: mount -o remount,rw
+            r2 = subprocess.run(
+                ["sudo", "-n", "mount", "-o", "remount,rw", mount_point],
+                capture_output=True, text=True, timeout=10
+            )
+            if r2.returncode == 0:
+                return True, f"Remounted {mount_point} as read-write"
+            return False, r.stderr.strip() or r2.stderr.strip()
+        except Exception as err:
+            logger.error(f"RemountReadWrite error: {err}")
+            return False, str(err)
+
+    @dbus.service.method("org.pequen.USBGuard", in_signature="s", out_signature="bs")
+    def UnmountDevice(self, mount_point: str) -> tuple[bool, str]:
+        """Unmounts a device at mount_point via udisksctl. Returns (success, message)."""
+        import subprocess
+        mount_point = mount_point.strip()
+        if not mount_point:
+            return False, "No mount point provided"
+        try:
+            result = subprocess.run(
+                ["findmnt", "-n", "-o", "SOURCE", mount_point],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                return False, f"Mount point not found: {mount_point}"
+            source = result.stdout.strip()
+            if not source:
+                return False, "Could not determine source device"
+            r = subprocess.run(
+                ["udisksctl", "unmount", "-b", source],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0:
+                return True, f"Unmounted {source}"
+            return False, r.stderr.strip()
+        except Exception as err:
+            logger.error(f"UnmountDevice error: {err}")
+            return False, str(err)
+
+
     @dbus.service.signal("org.pequen.USBGuard", signature="iss")
     def DeviceInserted(self, device_id: int, name: str, details_json: str) -> None:
         """Signal emitted when a new device is connected."""

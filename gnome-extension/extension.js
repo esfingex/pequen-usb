@@ -4,6 +4,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 const PequenDBusIface = `
 <node>
@@ -20,6 +21,16 @@ const PequenDBusIface = `
       <arg type="s" direction="in"/>
       <arg type="b" direction="in"/>
       <arg type="b" direction="out"/>
+    </method>
+    <method name="RemountReadWrite">
+      <arg type="s" direction="in"/>
+      <arg type="b" direction="out"/>
+      <arg type="s" direction="out"/>
+    </method>
+    <method name="UnmountDevice">
+      <arg type="s" direction="in"/>
+      <arg type="b" direction="out"/>
+      <arg type="s" direction="out"/>
     </method>
     <signal name="DeviceInserted">
       <arg type="i" name="device_id"/>
@@ -122,10 +133,19 @@ export default class PequenUSBExtension extends Extension {
         });
     }
 
+    _mountBadge(dev) {
+        if (!dev.is_mounted) return '⏏️';
+        return dev.is_read_only ? '🔒' : '🔓';
+    }
+
+    _mountLabel(dev) {
+        if (!dev.is_mounted) return _('No montado');
+        return dev.is_read_only ? _('Solo lectura') : _('Lectura/Escritura');
+    }
+
     _updateMenuDevices(devices) {
         this._devicesSection.removeAll();
 
-        // Filter strictly for removable storage devices (Pendrives/Discos) OR user-pinned devices
         let quickAccessDevices = devices.filter(dev => dev.category === 'storage' || dev.is_pinned);
 
         if (quickAccessDevices.length === 0) {
@@ -135,13 +155,63 @@ export default class PequenUSBExtension extends Extension {
         }
 
         quickAccessDevices.forEach(dev => {
-            let statusBadge = dev.is_allowed
-                ? (dev.is_permanent ? `🟢 [${_('Permitido (Permanente)')}]` : `🟡 [${_('Permitido (Temporal)')}]`)
-                : `🔴 [${_('Bloqueado')}]`;
+            // USBGuard permission badge
+            let permBadge = dev.is_allowed
+                ? (dev.is_permanent ? `🟢` : `🟡`)
+                : `🔴`;
 
-            let labelText = `${dev.name} ${statusBadge}`;
+            // Mount status badge
+            let mntBadge = this._mountBadge(dev);
+
+            let labelText = `${permBadge} ${mntBadge}  ${dev.name}`;
             let menuItem = new PopupMenu.PopupSubMenuMenuItem(labelText);
 
+            // --- Mount status line (non-reactive info) ---
+            let mountStatusText = dev.is_allowed
+                ? `   ${_('Montaje')}: ${this._mountLabel(dev)}`
+                : `   ${_('Bloqueado por USBGuard')}`;
+            let mountStatusItem = new PopupMenu.PopupMenuItem(mountStatusText, { reactive: false });
+            mountStatusItem.label.clutter_text.set_markup(
+                `<small><i>${mountStatusText.trim()}</i></small>`
+            );
+            menuItem.menu.addMenuItem(mountStatusItem);
+
+            menuItem.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+            // --- Open in Files (Nautilus) ---
+            if (dev.is_mounted && dev.mount_point) {
+                let openItem = new PopupMenu.PopupMenuItem(_('📂 Abrir en Archivos'));
+                openItem.connectObject('activate', () => {
+                    try {
+                        GLib.spawn_command_line_async(`xdg-open "${dev.mount_point}"`);
+                    } catch (e) {
+                        console.error(`[Pequén USB] Error opening file manager: ${e}`);
+                    }
+                }, this);
+                menuItem.menu.addMenuItem(openItem);
+            }
+
+            // --- Remount as RW ---
+            if (dev.is_mounted && dev.is_read_only && dev.mount_point) {
+                let remountItem = new PopupMenu.PopupMenuItem(_('🔓 Remontar como Lectura/Escritura'));
+                remountItem.connectObject('activate', () => {
+                    this._remountReadWrite(dev);
+                }, this);
+                menuItem.menu.addMenuItem(remountItem);
+            }
+
+            // --- Unmount ---
+            if (dev.is_mounted && dev.mount_point) {
+                let unmountItem = new PopupMenu.PopupMenuItem(_('⏏️ Desmontar'));
+                unmountItem.connectObject('activate', () => {
+                    this._unmountDevice(dev);
+                }, this);
+                menuItem.menu.addMenuItem(unmountItem);
+            }
+
+            menuItem.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+            // --- USBGuard policy actions ---
             let allowPermItem = new PopupMenu.PopupMenuItem(_('🟢 Permitir (Permanente)'));
             allowPermItem.connectObject('activate', () => this._applyPolicy(dev.number, 'allow', true), this);
             menuItem.menu.addMenuItem(allowPermItem);
@@ -215,7 +285,41 @@ export default class PequenUSBExtension extends Extension {
         });
     }
 
-    _notifyDeviceInserted(devId, name, detailsJson) {
+    _remountReadWrite(dev) {
+        if (!this._proxy) return;
+        this._proxy.RemountReadWriteRemote(dev.mount_point, (result, error) => {
+            if (error) {
+                Main.notify(_('🦉 Pequén USB'), `Error al remontar: ${error.message}`);
+                return;
+            }
+            let [success, msg] = result;
+            if (success) {
+                Main.notify(_('🦉 Pequén USB'), `✅ ${dev.name} remontado en Lectura/Escritura`);
+            } else {
+                Main.notify(_('🦉 Pequén USB'), `⚠️ No se pudo remontar: ${msg}`);
+            }
+            this._refreshAll();
+        });
+    }
+
+    _unmountDevice(dev) {
+        if (!this._proxy) return;
+        this._proxy.UnmountDeviceRemote(dev.mount_point, (result, error) => {
+            if (error) {
+                Main.notify(_('🦉 Pequén USB'), `Error al desmontar: ${error.message}`);
+                return;
+            }
+            let [success, msg] = result;
+            if (success) {
+                Main.notify(_('🦉 Pequén USB'), `✅ ${dev.name} desmontado correctamente`);
+            } else {
+                Main.notify(_('🦉 Pequén USB'), `⚠️ No se pudo desmontar: ${msg}`);
+            }
+            this._refreshAll();
+        });
+    }
+
+    _notifyDeviceInserted(devId, name, _detailsJson) {
         let title = _('🦉 ¡Pequén USB Alerta!');
         let body = `Se ha insertado un nuevo USB: ${name}`;
         Main.notify(title, body);

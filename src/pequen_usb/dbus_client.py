@@ -68,6 +68,7 @@ class USBDevice:
             self.with_interface = [self.with_interface]
 
         self.category = self._detect_category()
+        self.mount_point, self.is_read_only = self._detect_mount_info()
 
     def _detect_category(self) -> str:
         """Classifies device into 'storage', 'system', or 'peripheral' based on interfaces & sysfs."""
@@ -109,6 +110,42 @@ class USBDevice:
 
         return "peripheral"
 
+    def _detect_mount_info(self) -> tuple[str, bool]:
+        """Returns (mount_point, is_read_only) by matching block devices linked to this USB port."""
+        if not self.via_port:
+            return "", False
+        port_name = self.via_port.strip('"')
+        try:
+            # Find block devices under this USB port in sysfs
+            block_devs = []
+            usb_path = Path(f"/sys/bus/usb/devices/{port_name}")
+            if usb_path.exists():
+                for child in usb_path.rglob("block"):
+                    for blk in child.iterdir():
+                        block_devs.append(blk.name)
+            if not block_devs:
+                return "", False
+            # Match against /proc/mounts
+            mounts_text = Path("/proc/mounts").read_text()
+            for line in mounts_text.splitlines():
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                device, mountpoint, _, options = parts[0], parts[1], parts[2], parts[3]
+                dev_name = device.split("/")[-1]
+                # match e.g. sdc1, sdc2 against block_devs like sdc
+                if any(dev_name.startswith(bd) or bd.startswith(dev_name) for bd in block_devs):
+                    opts = options.split(",")
+                    is_ro = "ro" in opts
+                    return mountpoint, is_ro
+        except Exception:
+            pass
+        return "", False
+
+    @property
+    def is_mounted(self) -> bool:
+        return bool(self.mount_point)
+
     @property
     def is_allowed(self) -> bool:
         return self.rule.lower() == "allow"
@@ -142,6 +179,9 @@ class USBDevice:
             "via_port": self.via_port,
             "with_interface": self.with_interface,
             "is_allowed": self.is_allowed,
+            "is_mounted": self.is_mounted,
+            "mount_point": self.mount_point,
+            "is_read_only": self.is_read_only,
         }
 
 
