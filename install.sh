@@ -55,6 +55,21 @@ if command -v systemctl >/dev/null 2>&1; then
     sudo systemctl restart usbguard.service usbguard-dbus.service 2>/dev/null || true
 fi
 
+# 1.6. Regla sudoers para remonte automático de USB sin contraseña
+echo "[*] Configurando regla sudoers para remonte automático de USB..."
+SUDOERS_FILE="/etc/sudoers.d/pequen-usb"
+MOUNT_BIN="$(which mount)"
+TARGET_USER="${SUDO_USER:-$USER}"
+SUDOERS_LINE="$TARGET_USER ALL=(ALL) NOPASSWD: $MOUNT_BIN -o remount*"
+if ! sudo grep -qF "$TARGET_USER" "$SUDOERS_FILE" 2>/dev/null; then
+    echo "$SUDOERS_LINE" | sudo tee "$SUDOERS_FILE" >/dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
+    echo "✅ Regla sudoers creada en $SUDOERS_FILE"
+else
+    echo "✅ Regla sudoers ya existe para $TARGET_USER"
+fi
+
+
 # 2. Install Python package locally
 
 echo "[*] Instalando paquete Python de Pequén USB..."

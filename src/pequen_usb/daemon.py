@@ -1,5 +1,8 @@
 import json
 import logging
+import os
+import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 import dbus
 import dbus.service
@@ -77,7 +80,15 @@ class PequénSessionService(dbus.service.Object):
 
         future = self.executor.submit(_execute_apply)
         try:
-            return future.result(timeout=30.0)
+            result = future.result(timeout=30.0)
+            # Auto-fix mount ownership after allowing a storage device
+            if result and action.lower() == "allow":
+                perm_map = self.daemon.history.get_permanence_map()
+                devices = self.daemon.client.get_all_devices(permanent_map=perm_map) if self.daemon.client else []
+                target_dev = next((d for d in devices if d.number == device_id), None)
+                if target_dev and target_dev.category == "storage":
+                    self.executor.submit(self.daemon._auto_fix_mount, target_dev)
+            return result
         except Exception as exc:
             logger.error(f"Timed out or failed applying policy for device {device_id}: {exc}")
             return False
@@ -234,6 +245,71 @@ class PequénDaemon:
             )
             # Emit signal to GNOME Shell extension
             self.service.DeviceInserted(int(dev_id), device.name, json.dumps(device.to_dict()))
+
+        # Auto-fix mount ownership for allowed storage devices on insert
+        if event == 1 and device.is_allowed and device.category == "storage":
+            self.executor.submit(self._auto_fix_mount, device)
+
+    def _auto_fix_mount(self, device: USBDevice, wait: float = 2.5) -> None:
+        """Detect and fix mounts owned by root instead of the session user.
+
+        When USBGuard authorizes a device late (after udisks auto-mount), the
+        filesystem ends up owned by root. This method remounts it with the
+        correct uid/gid so the session user can write to it.
+        """
+        time.sleep(wait)  # wait for udisks auto-mount to settle
+
+        # Re-detect mount info after potential auto-mount
+        mount_point, _ = device._detect_mount_info()
+        if not mount_point:
+            logger.debug(f"[auto-fix] {device.name} not mounted yet, skipping.")
+            return
+
+        try:
+            stat_info = os.stat(mount_point)
+        except OSError:
+            return
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+
+        if stat_info.st_uid == current_uid:
+            logger.debug(f"[auto-fix] {device.name} already owned by uid={current_uid}, no fix needed.")
+            return
+
+        logger.info(f"[auto-fix] {device.name} mounted as root at {mount_point}. Fixing uid={current_uid}...")
+
+        # Find block device
+        try:
+            result = subprocess.run(
+                ["findmnt", "-n", "-o", "SOURCE", mount_point],
+                capture_output=True, text=True, timeout=5
+            )
+            source = result.stdout.strip() if result.returncode == 0 else ""
+        except Exception:
+            source = ""
+
+        # Strategy 1: sudo -n mount -o remount,uid=X,gid=X (requires sudoers rule from install.sh)
+        r = subprocess.run(
+            ["sudo", "-n", "mount", "-o", f"remount,uid={current_uid},gid={current_gid}", mount_point],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0:
+            logger.info(f"[auto-fix] ✅ Remounted {mount_point} with uid={current_uid}")
+            GLib.idle_add(self.service.DevicePolicyChanged, device.number, "allow", device.is_permanent)
+            return
+
+        # Strategy 2: udisksctl unmount + mount (works only if device is not busy)
+        if source:
+            r2 = subprocess.run(["udisksctl", "unmount", "-b", source], capture_output=True, text=True, timeout=10)
+            if r2.returncode == 0:
+                r3 = subprocess.run(["udisksctl", "mount", "-b", source], capture_output=True, text=True, timeout=10)
+                if r3.returncode == 0:
+                    logger.info(f"[auto-fix] ✅ Re-mounted {source} via udisksctl")
+                    GLib.idle_add(self.service.DevicePolicyChanged, device.number, "allow", device.is_permanent)
+                    return
+
+        logger.warning(f"[auto-fix] ⚠️ Could not fix mount ownership for {mount_point}: {r.stderr.strip()}")
 
     def run(self) -> None:
         logger.info(t("daemon_listening"))
