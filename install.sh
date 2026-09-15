@@ -32,8 +32,8 @@ else
     echo "✅ USBGuard está instalado en el sistema."
 fi
 
-# 1.5. Configurar permisos IPC de USBGuard para el usuario actual
-echo "[*] Configurando permisos IPC de USBGuard para el usuario ($USER)..."
+# 1.5. Configurar permisos IPC y servicios systemd de USBGuard
+echo "[*] Configurando permisos IPC y servicios de USBGuard..."
 CONF_FILE="/etc/usbguard/usbguard-daemon.conf"
 if [ -f "$CONF_FILE" ]; then
     TARGET_USER="${SUDO_USER:-$USER}"
@@ -44,12 +44,15 @@ if [ -f "$CONF_FILE" ]; then
             echo "IPCAllowedUsers=root $TARGET_USER" | sudo tee -a "$CONF_FILE" >/dev/null
         fi
         echo "✅ Usuario $TARGET_USER agregado a IPCAllowedUsers en $CONF_FILE."
-        if command -v systemctl >/dev/null 2>&1; then
-            sudo systemctl restart usbguard || true
-        fi
     else
         echo "✅ Permisos IPC ya configurados para $TARGET_USER en USBGuard."
     fi
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+    echo "[*] Habilitando y reiniciando usbguard.service y usbguard-dbus.service..."
+    sudo systemctl enable --now usbguard.service usbguard-dbus.service 2>/dev/null || true
+    sudo systemctl restart usbguard.service usbguard-dbus.service 2>/dev/null || true
 fi
 
 # 2. Install Python package locally
