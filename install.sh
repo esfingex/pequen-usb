@@ -32,6 +32,26 @@ else
     echo "✅ USBGuard está instalado en el sistema."
 fi
 
+# 1.5. Configurar permisos IPC de USBGuard para el usuario actual
+echo "[*] Configurando permisos IPC de USBGuard para el usuario ($USER)..."
+CONF_FILE="/etc/usbguard/usbguard-daemon.conf"
+if [ -f "$CONF_FILE" ]; then
+    TARGET_USER="${SUDO_USER:-$USER}"
+    if ! sudo grep -q "IPCAllowedUsers=.*$TARGET_USER" "$CONF_FILE" 2>/dev/null; then
+        if sudo grep -q "^IPCAllowedUsers=" "$CONF_FILE"; then
+            sudo sed -i "/^IPCAllowedUsers=/ s/$/ $TARGET_USER/" "$CONF_FILE"
+        else
+            echo "IPCAllowedUsers=root $TARGET_USER" | sudo tee -a "$CONF_FILE" >/dev/null
+        fi
+        echo "✅ Usuario $TARGET_USER agregado a IPCAllowedUsers en $CONF_FILE."
+        if command -v systemctl >/dev/null 2>&1; then
+            sudo systemctl restart usbguard || true
+        fi
+    else
+        echo "✅ Permisos IPC ya configurados para $TARGET_USER en USBGuard."
+    fi
+fi
+
 # 2. Install Python package locally
 
 echo "[*] Instalando paquete Python de Pequén USB..."
